@@ -1,6 +1,9 @@
 import { createEnv } from '@t3-oss/env-nextjs'
 import { z } from 'zod'
 
+// Server secrets that must be present at boot; a missing value hard-fails startup.
+export const REQUIRED_SERVER_SECRETS = ['INTERNAL_BRIDGE_SECRET'] as const
+
 export const env = createEnv({
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
   server: {
@@ -19,6 +22,9 @@ export const env = createEnv({
     READINGS_RATE_LIMIT_PER_MINUTE: z.string().optional(),
     READINGS_RATE_LIMIT_WINDOW_SECONDS: z.string().optional(),
     WEBHOOK_SECRET: z.string().min(16).optional(),
+    // Shared secret for zero-trust auth between Next.js and the bridge service.
+    // Sent as the X-Internal-Secret header on outbound bridge calls.
+    INTERNAL_BRIDGE_SECRET: z.string().min(32),
   },
   client: {
     NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
@@ -47,5 +53,13 @@ export const env = createEnv({
     READINGS_RATE_LIMIT_PER_MINUTE: process.env.READINGS_RATE_LIMIT_PER_MINUTE,
     READINGS_RATE_LIMIT_WINDOW_SECONDS: process.env.READINGS_RATE_LIMIT_WINDOW_SECONDS,
     WEBHOOK_SECRET: process.env.WEBHOOK_SECRET,
+    INTERNAL_BRIDGE_SECRET: process.env.INTERNAL_BRIDGE_SECRET,
   },
 })
+
+// Startup validator: fail fast if any required server secret is missing.
+for (const key of REQUIRED_SERVER_SECRETS) {
+  if (!process.env[key]) {
+    throw new Error(`Missing required server secret: ${key}`)
+  }
+}
